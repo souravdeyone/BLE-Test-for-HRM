@@ -1,0 +1,244 @@
+<html>
+<head>
+<title>MainActivity.java</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #000080; font-weight: bold;}
+.s1 { color: #000000;}
+.s2 { color: #0000ff;}
+.s3 { color: #808080; font-style: italic;}
+</style>
+</head>
+<body bgcolor="#ffffff">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#c0c0c0" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+MainActivity.java</font>
+</center></td></tr></table>
+<pre><span class="s0">package </span>com.example.bleapplication;
+
+<span class="s0">import </span>android.app.Activity;
+<span class="s0">import </span>android.app.ListActivity;
+<span class="s0">import </span>android.bluetooth.BluetoothAdapter;
+<span class="s0">import </span>android.bluetooth.BluetoothDevice;
+<span class="s0">import </span>android.bluetooth.BluetoothManager;
+<span class="s0">import </span>android.content.Context;
+<span class="s0">import </span>android.content.Intent;
+<span class="s0">import </span>android.content.pm.PackageManager;
+<span class="s0">import </span>android.os.Bundle;
+<span class="s0">import </span>android.os.Handler;
+<span class="s0">import </span>android.view.LayoutInflater;
+<span class="s0">import </span>android.view.Menu;
+<span class="s0">import </span>android.view.MenuItem;
+<span class="s0">import </span>android.view.View;
+<span class="s0">import </span>android.view.ViewGroup;
+<span class="s0">import </span>android.widget.BaseAdapter;
+<span class="s0">import </span>android.widget.ListView;
+<span class="s0">import </span>android.widget.TextView;
+<span class="s0">import </span>android.widget.Toast;
+<span class="s0">import </span>java.util.ArrayList;
+
+<span class="s0">public class </span>MainActivity <span class="s0">extends </span>ListActivity {
+    <span class="s0">private </span>LeDeviceListAdapter mLeDeviceListAdapter;
+    <span class="s0">private </span>BluetoothAdapter mBluetoothAdapter;
+    <span class="s0">private boolean </span>mScanning;
+    <span class="s0">private </span>Handler mHandler;
+    <span class="s0">private static final int </span>REQUEST_ENABLE_BT = <span class="s2">1</span>;
+    <span class="s0">private static final long </span>SCAN_PERIOD = <span class="s2">10000</span>;
+
+    @Override
+    <span class="s0">public void </span>onCreate(Bundle savedInstanceState) {
+        <span class="s0">super</span>.onCreate(savedInstanceState);
+        <span class="s3">//getActionBar().setTitle(R.string.title_devices);</span>
+        mHandler = <span class="s0">new </span>Handler();
+
+        <span class="s3">// Use this check to determine whether BLE is supported on the device.  Then you can</span>
+        // selectively disable BLE-related features.
+        <span class="s0">if </span>(!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
+            Toast.makeText(<span class="s0">this</span>, R.string.ble_not_supported, Toast.LENGTH_SHORT).show();
+            finish();
+        }
+        <span class="s3">// Initializes a Bluetooth adapter.  For API level 18 and above, get a reference to</span>
+        // BluetoothAdapter through BluetoothManager.
+        <span class="s0">final </span>BluetoothManager bluetoothManager =
+                (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+        mBluetoothAdapter = bluetoothManager.getAdapter();
+        <span class="s3">// Checks if Bluetooth is supported on the device.</span>
+        <span class="s0">if </span>(mBluetoothAdapter == <span class="s0">null</span>) {
+            Toast.makeText(<span class="s0">this</span>, R.string.error_bluetooth_not_supported, Toast.LENGTH_SHORT).show();
+            finish();
+            <span class="s0">return</span>;
+        }
+    }
+
+    @Override
+    <span class="s0">public boolean </span>onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main, menu);
+        <span class="s0">if </span>(!mScanning) {
+            menu.findItem(R.id.menu_stop).setVisible(<span class="s0">false</span>);
+            menu.findItem(R.id.menu_scan).setVisible(<span class="s0">true</span>);
+            menu.findItem(R.id.menu_refresh).setActionView(<span class="s0">null</span>);
+        } <span class="s0">else </span>{
+            menu.findItem(R.id.menu_stop).setVisible(<span class="s0">true</span>);
+            menu.findItem(R.id.menu_scan).setVisible(<span class="s0">false</span>);
+            menu.findItem(R.id.menu_refresh).setActionView(
+                    R.layout.actionbar_indeterminate_progress);
+        }
+        <span class="s0">return true</span>;
+    }
+
+    @Override
+    <span class="s0">public boolean </span>onOptionsItemSelected(MenuItem item) {
+        <span class="s0">switch </span>(item.getItemId()) {
+            <span class="s0">case </span>R.id.menu_scan:
+                mLeDeviceListAdapter.clear();
+                scanLeDevice(<span class="s0">true</span>);
+                <span class="s0">break</span>;
+            <span class="s0">case </span>R.id.menu_stop:
+                scanLeDevice(<span class="s0">false</span>);
+                <span class="s0">break</span>;
+        }
+        <span class="s0">return true</span>;
+    }
+
+    @Override
+    <span class="s0">protected void </span>onResume() {
+        <span class="s0">super</span>.onResume();
+        <span class="s3">// Ensures Bluetooth is enabled on the device.  If Bluetooth is not currently enabled,</span>
+        // fire an intent to display a dialog asking the user to grant permission to enable it.
+        <span class="s0">if </span>(!mBluetoothAdapter.isEnabled()) {
+            Intent enableBtIntent = <span class="s0">new </span>Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+        }
+        <span class="s3">// Initializes list view adapter.</span>
+        mLeDeviceListAdapter = <span class="s0">new </span>LeDeviceListAdapter();
+        setListAdapter(mLeDeviceListAdapter);
+        scanLeDevice(<span class="s0">true</span>);
+    }
+
+    @Override
+    <span class="s0">protected void </span>onActivityResult(<span class="s0">int </span>requestCode, <span class="s0">int </span>resultCode, Intent data) {
+        <span class="s3">// User chose not to enable Bluetooth.</span>
+        <span class="s0">if </span>(requestCode == REQUEST_ENABLE_BT &amp;&amp; resultCode == Activity.RESULT_CANCELED) {
+            finish();
+            <span class="s0">return</span>;
+        }
+        <span class="s0">super</span>.onActivityResult(requestCode, resultCode, data);
+    }
+
+    @Override
+    <span class="s0">protected void </span>onPause() {
+        <span class="s0">super</span>.onPause();
+        scanLeDevice(<span class="s0">false</span>);
+        mLeDeviceListAdapter.clear();
+    }
+
+    <span class="s0">private void </span>scanLeDevice(<span class="s0">final boolean </span>enable) {
+        <span class="s0">if </span>(enable) {
+            <span class="s3">// Stops scanning after a pre-defined scan period.</span>
+            mHandler.postDelayed(<span class="s0">new </span>Runnable() {
+                @Override
+                <span class="s0">public void </span>run() {
+                    mScanning = <span class="s0">false</span>;
+                    mBluetoothAdapter.stopLeScan(mLeScanCallback);
+                    invalidateOptionsMenu();
+                }
+            }, SCAN_PERIOD);
+            mScanning = <span class="s0">true</span>;
+            mBluetoothAdapter.startLeScan(mLeScanCallback);
+        } <span class="s0">else </span>{
+            mScanning = <span class="s0">false</span>;
+            mBluetoothAdapter.stopLeScan(mLeScanCallback);
+        }
+        invalidateOptionsMenu();
+    }
+
+    <span class="s3">// Adapter for holding devices found through scanning.</span>
+    <span class="s0">private class </span>LeDeviceListAdapter <span class="s0">extends </span>BaseAdapter {
+        <span class="s0">private </span>ArrayList&lt;BluetoothDevice&gt; mLeDevices;
+        <span class="s0">private </span>LayoutInflater mInflator;
+
+        <span class="s0">public </span>LeDeviceListAdapter() {
+            <span class="s0">super</span>();
+            mLeDevices = <span class="s0">new </span>ArrayList&lt;BluetoothDevice&gt;();
+            mInflator = MainActivity.<span class="s0">this</span>.getLayoutInflater();
+        }
+
+        <span class="s0">public void </span>addDevice(BluetoothDevice device) {
+            <span class="s0">if </span>(!mLeDevices.contains(device)) {
+                mLeDevices.add(device);
+            }
+        }
+
+        <span class="s0">public </span>BluetoothDevice getDevice(<span class="s0">int </span>position) {
+            <span class="s0">return </span>mLeDevices.get(position);
+        }
+
+        <span class="s0">public void </span>clear() {
+            mLeDevices.clear();
+        }
+
+        @Override
+        <span class="s0">public int </span>getCount() {
+            <span class="s0">return </span>mLeDevices.size();
+        }
+
+        @Override
+        <span class="s0">public </span>Object getItem(<span class="s0">int </span>i) {
+            <span class="s0">return </span>mLeDevices.get(i);
+        }
+
+        @Override
+        <span class="s0">public long </span>getItemId(<span class="s0">int </span>i) {
+            <span class="s0">return </span>i;
+        }
+
+        @Override
+        <span class="s0">public </span>View getView(<span class="s0">int </span>i, View view, ViewGroup viewGroup) {
+            ViewHolder viewHolder;
+            <span class="s3">// General ListView optimization code.</span>
+            <span class="s0">if </span>(view == <span class="s0">null</span>) {
+                view = mInflator.inflate(R.layout.activity_main, <span class="s0">null</span>);
+                viewHolder = <span class="s0">new </span>ViewHolder();
+                viewHolder.deviceAddress = (TextView) view.findViewById(R.id.device_address);
+                viewHolder.deviceName = (TextView) view.findViewById(R.id.device_name);
+                view.setTag(viewHolder);
+            } <span class="s0">else </span>{
+                viewHolder = (ViewHolder) view.getTag();
+            }
+
+            BluetoothDevice device = mLeDevices.get(i);
+            <span class="s0">final </span>String deviceName = device.getName();
+            <span class="s0">if </span>(deviceName != <span class="s0">null </span>&amp;&amp; deviceName.length() &gt; <span class="s2">0</span>)
+                viewHolder.deviceName.setText(deviceName);
+            <span class="s0">else</span>
+                viewHolder.deviceName.setText(R.string.unknown_device);
+            viewHolder.deviceAddress.setText(device.getAddress());
+
+            <span class="s0">return </span>view;
+        }
+    }
+
+    <span class="s3">// Device scan callback.</span>
+    <span class="s0">private </span>BluetoothAdapter.LeScanCallback mLeScanCallback =
+            <span class="s0">new </span>BluetoothAdapter.LeScanCallback() {
+
+                @Override
+                <span class="s0">public void </span>onLeScan(<span class="s0">final </span>BluetoothDevice device, <span class="s0">int </span>rssi, <span class="s0">byte</span>[] scanRecord) {
+                    runOnUiThread(<span class="s0">new </span>Runnable() {
+                        @Override
+                        <span class="s0">public void </span>run() {
+                            mLeDeviceListAdapter.addDevice(device);
+                            mLeDeviceListAdapter.notifyDataSetChanged();
+                        }
+                    });
+                }
+            };
+
+    <span class="s0">static class </span>ViewHolder {
+        TextView deviceName;
+        TextView deviceAddress;
+    }
+}</pre>
+</body>
+</html>
