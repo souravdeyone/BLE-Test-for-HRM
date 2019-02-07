@@ -9,6 +9,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.ParcelUuid;
 import android.util.Log;
 import android.view.LayoutInflater;
 
@@ -175,6 +176,18 @@ public class MainActivity extends ListActivity {
                     int position = (Integer) v.getTag();
                     Log.e("Bob", Integer.toString(position));
                     //Log.e("Bob", mLeDevices.get(position).getName());
+
+
+                    ParcelUuid[] deviceUUID = mLeDevices.get(position).getUuids();
+                    if (deviceUUID != null){
+                        for (int i=0; i<deviceUUID.length; i++){
+                            Log.e("UUID", deviceUUID[i].toString());
+                        }
+                    }
+                    else{
+                        Log.e("UUID", "No UUID found");
+                    }
+
 
                     Intent intent = new Intent(getApplicationContext(), bleConnection.class);
                     intent.putExtra("BLUETOOTH_DEVICE", mLeDevices.get(position));
